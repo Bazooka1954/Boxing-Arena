@@ -1,0 +1,19 @@
+@"
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+"@ | Set-Content -Path .gitignore -Encoding utf8

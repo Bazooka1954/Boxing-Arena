@@ -1,0 +1,209 @@
+﻿import { useEffect, useRef, useState } from 'react'
+
+const FRAME_COUNT = 40
+const getFrameSrc = (index) => {
+  const num = String(index + 1).padStart(3, '0')
+  return `/Frames/ezgif-frame-${num}.png`
+}
+
+export default function Hero() {
+  const containerRef = useRef(null)
+  const canvasRef = useRef(null)
+  const imagesRef = useRef([])
+  const rafRef = useRef(null)
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const images = []
+    let loadedCount = 0
+
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      const img = new Image()
+      img.src = getFrameSrc(i)
+      img.onload = () => {
+        if (cancelled) return
+        loadedCount++
+        if (loadedCount === FRAME_COUNT) {
+          setLoaded(true)
+        }
+      }
+      img.onerror = () => {
+        if (cancelled) return
+        setError(true)
+      }
+      images.push(img)
+    }
+    imagesRef.current = images
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const container = containerRef.current
+    const canvas = canvasRef.current
+    if (!container || !canvas || !loaded) return
+
+    const ctx = canvas.getContext('2d')
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    const drawFrame = (frameIndex) => {
+      const images = imagesRef.current
+      const img = images[frameIndex]
+      if (!img || !img.complete) return
+
+      const dpr = window.devicePixelRatio || 1
+      const rect = container.getBoundingClientRect()
+      const cssWidth = rect.width
+      const cssHeight = rect.height
+
+      if (canvas.width !== Math.floor(cssWidth * dpr) || canvas.height !== Math.floor(cssHeight * dpr)) {
+        canvas.width = Math.floor(cssWidth * dpr)
+        canvas.height = Math.floor(cssHeight * dpr)
+        canvas.style.width = cssWidth + 'px'
+        canvas.style.height = cssHeight + 'px'
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+      ctx.clearRect(0, 0, cssWidth, cssHeight)
+
+      const imgRatio = img.naturalWidth / img.naturalHeight
+      const containerRatio = cssWidth / cssHeight
+      let drawWidth, drawHeight, drawX, drawY
+
+      if (containerRatio > imgRatio) {
+        drawWidth = cssWidth
+        drawHeight = cssWidth / imgRatio
+        drawX = 0
+        drawY = (cssHeight - drawHeight) / 2
+      } else {
+        drawHeight = cssHeight
+        drawWidth = cssHeight * imgRatio
+        drawX = (cssWidth - drawWidth) / 2
+        drawY = 0
+      }
+
+      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight)
+    }
+
+    if (reduceMotion) {
+      drawFrame(0)
+      return
+    }
+
+    const getScrollProgress = () => {
+      const rect = container.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+      const start = rect.top + window.scrollY
+      const end = start + rect.height - viewportHeight
+      const current = window.scrollY
+      if (current <= start) return 0
+      if (current >= end) return 1
+      return (current - start) / (end - start)
+    }
+
+    const update = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => {
+        const progress = getScrollProgress()
+        const frameIndex = Math.min(FRAME_COUNT - 1, Math.max(0, Math.floor(progress * (FRAME_COUNT - 1))))
+        drawFrame(frameIndex)
+      })
+    }
+
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [loaded])
+
+  return (
+    <div className="min-h-[100svh] w-full p-1.5 sm:p-2 md:p-2.5 lg:p-3">
+      <section
+        ref={containerRef}
+        className="relative mx-auto h-[calc(100svh-0.75rem)] min-h-[calc(100svh-0.75rem)] w-full max-w-[1920px] overflow-hidden rounded-[8px] border border-black/40 bg-[rgba(0,0,0,0.4)] sm:h-[calc(100svh-1rem)] sm:min-h-[calc(100svh-1rem)] sm:rounded-[10px] md:h-[calc(100svh-1.25rem)] md:min-h-[calc(100svh-1.25rem)] md:rounded-[10px] lg:h-[calc(100svh-1.5rem)] lg:min-h-[calc(100svh-1.5rem)] lg:rounded-[12px]"
+      >
+        <div className="absolute inset-0 z-0">
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full block" aria-hidden="true" />
+        </div>
+        <div className="relative z-[1] flex h-full min-h-full flex-col pointer-events-none">
+          <div className="absolute inset-0 pointer-events-none bg-black/55" />
+          <header className="relative z-[1] flex w-full justify-center m-0 p-0">
+            <nav
+              className="
+                pointer-events-auto relative mt-0 flex w-fit items-start justify-center gap-3
+                rounded-b-[16px] bg-black px-5 pt-1 pb-3
+                text-[9px] leading-none tracking-[0.24em] uppercase
+                sm:gap-5 sm:px-6 sm:text-[10px]
+                md:gap-7 md:px-8 md:pt-1.5 md:pb-4
+
+                [--bar:#000] [--r:16px]
+
+                before:pointer-events-none before:absolute before:top-0 before:-left-[var(--r)]
+                before:h-[var(--r)] before:w-[var(--r)] before:content-['']
+                before:bg-[radial-gradient(circle_at_0_100%,transparent_var(--r),var(--bar)_calc(var(--r)_+_0.5px))]
+
+                after:pointer-events-none after:absolute after:top-0 after:-right-[var(--r)]
+                after:h-[var(--r)] after:w-[var(--r)] before:content-['']
+                after:bg-[radial-gradient(circle_at_100%_100%,transparent_var(--r),var(--bar)_calc(var(--r)_+_0.5px))]
+              "
+            >              <a href="#" className="text-text-secondary transition-colors hover:text-text-primary">About</a>
+              <a href="#" className="text-text-secondary transition-colors hover:text-text-primary">Fighters</a>
+              <a href="#" className="text-text-secondary transition-colors hover:text-text-primary">Events</a>
+              <a href="#" className="text-text-secondary transition-colors hover:text-text-primary">Rankings</a>
+              <a href="#" className="text-text-secondary transition-colors hover:text-text-primary">Community</a>
+            </nav>
+          </header>
+          <div className="relative z-[1] flex flex-1 flex-col justify-end px-4 pb-6 sm:px-6 sm:pb-8 lg:px-10 lg:pb-10 xl:px-14 xl:pb-12">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(260px,0.8fr)] lg:items-end lg:gap-10 xl:gap-16">
+              <div className="max-w-[min(1080px,100%)]">
+                <h1 className="m-0 font-bebas font-normal uppercase leading-[0.82] tracking-[-0.01em] text-[clamp(68px,14vw,200px)] text-balance">
+                  WHERE
+                  <br />
+                  CHAMPIONS
+                  <br />
+                  RISE.
+                </h1>
+              </div>
+              <div className="flex max-w-[300px] flex-col items-start gap-3 lg:justify-self-end lg:mb-1 pointer-events-auto">
+                <p className="m-0 text-xs leading-[1.8] text-text-secondary sm:text-sm">
+                  Step into the ring where grit meets glory. Witness relentless ambition and legendary bouts.
+                </p>
+                <button
+                  type="button"
+                  className="group inline-flex items-center gap-2.5 rounded-full bg-white px-4 py-1.5 text-sm font-medium text-[#101114] transition-[filter] hover:brightness-95 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  <span>Explore Fighters</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#101114]">
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <path d="M2.5 7.5L7.5 2.5M7.5 2.5H3.33333M7.5 2.5V6.66667" stroke="white" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {!loaded && !error && (
+          <div className="absolute inset-0 z-[3] flex items-center justify-center text-text-secondary bg-[radial-gradient(ellipse_at_center,rgba(8,9,11,0.3)_0%,rgba(8,9,11,0.9)_100%)]">
+            Loading...
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 z-[3] flex items-center justify-center text-text-secondary bg-[radial-gradient(ellipse_at_center,rgba(8,9,11,0.3)_0%,rgba(8,9,11,0.9)_100%)]">
+            Unable to load frames
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
